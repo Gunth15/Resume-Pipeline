@@ -1,2 +1,4 @@
 ollama
 textual
+genson
+pyyaml

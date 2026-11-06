@@ -1,6 +1,8 @@
 from ollama import ChatResponse
 from ollama import Client
 import json
+import yaml
+from genson import SchemaBuilder
 
 
 def key_phrases_prompt(description: str) -> str:
@@ -28,10 +30,43 @@ def key_phrases_prompt(description: str) -> str:
     """
 
 
+def resume_prompt(job: str, profile: str) -> str:
+    return f"""
+    Using the user's profile information, which is between the <profile></profile>XML tags, create a resume tailored from the relevant job information, which is between the <job></job>XML tags.
+    DO PICK the information that aligns best with the job information.
+    DO MAKE THE RESUM
+    DO NOT MAKE UP INFORMATIONS THAT CAN NOT BE INFERRED FROM THE USER'S profile.
+    PREFER WORK THATS IS NEWER
+    The resume must be returned in JSON form.
+    <profile>
+        {profile}
+    </profile>
+    <job>
+        {job}
+    </job>
+    """
+
+
+def schema_from_profile(file: str):
+    with open(file) as prof_file:
+        profile = yaml.safe_load(prof_file)
+        builder = SchemaBuilder()
+        builder.add_object(profile)
+
+        profile_schema = builder.to_schema()
+        return (profile, profile_schema)
+
+
 class Editor:
-    def __init__(self, model="") -> None:
+    def __init__(self, model="", profile="master.yaml") -> None:
         self.model = model
         self.client = Client()
+
+        (profile, profile_schema) = schema_from_profile(profile)
+
+        self.profile = profile
+        self.profile_schema = profile_schema
+        self.resume = None
 
     def find_key_phrases(self, description: str):
         prompt = key_phrases_prompt(description)
@@ -43,15 +78,11 @@ class Editor:
                     "content": prompt,
                 }
             ],
-            format = {
+            format={
                 "type": "object",
                 "properties": {
-                    "job" : {
-                        "type" : ["string", "null"]
-                    },
-                    "company": {
-                        "type": ["string", "null"]
-                    },
+                    "job": {"type": ["string", "null"]},
+                    "company": {"type": ["string", "null"]},
                     "requirements": {
                         "type": ["array", "null"],
                         "items": {
@@ -59,49 +90,80 @@ class Editor:
                             "properties": {
                                 "type": {
                                     "type": "string",
-                                    "enum": ["education", "technical", "senority"]
+                                    "enum": ["education", "technical", "senority"],
                                 },
                                 "importance": {
                                     "type": "string",
-                                    "enum": ["preferred", "required"]
+                                    "enum": ["preferred", "required"],
                                 },
-                                "description": {
-                                    "type": ["string", "null"]
-                                }
+                                "description": {"type": ["string", "null"]},
                             },
-                            "required": ["type", "importance", "description"]
-                        }
+                            "required": ["type", "importance", "description"],
+                        },
                     },
                     "hard_skills": {
                         "type": ["array", "null"],
-                        "items": {"type": "string"}
+                        "items": {"type": "string"},
                     },
                     "soft_skills": {
                         "type": ["array", "null"],
-                        "items": {"type": "string"}
+                        "items": {"type": "string"},
                     },
-                    "tools": {
-                        "type": ["array", "null"],
-                        "items": {"type": "string"}
-                    }
+                    "tools": {"type": ["array", "null"], "items": {"type": "string"}},
                 },
                 "required": [
                     "company",
                     "requirements",
                     "hard_skills",
                     "soft_skills",
-                    "tools"
-                ]
+                    "tools",
+                ],
             },
             think=False,
         )
 
-        if resp['message']['content'] is None:
+        if resp["message"]["content"] is None:
             raise TypeError("RESPONSE IS NOT THE EXPECTED FORMAT")
 
-        content = resp['message']['content']
+        content = resp["message"]["content"]
 
         with open("response.json", "w+") as f:
             f.write(content)
 
-        return json.loads(content)
+        self.key_phrases = json.loads(content)
+        return self.key_phrases
+
+    def set_schema_from_profile(self, file: str):
+        with open(file) as prof_file:
+            profile = yaml.safe_load(prof_file)
+            builder = SchemaBuilder()
+            builder.add_object(profile)
+
+            self.profile = profile
+            self.profile_schema = builder.to_schema()
+            return (self.profile, self.profile_schema)
+
+    def generate_resume(self):
+        prompt = resume_prompt(json.dumps(self.key_phrases), json.dumps(self.profile))
+        resp: ChatResponse = self.client.chat(
+            model=self.model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            format=self.profile_schema,
+            think=False,
+        )
+
+        if resp["message"]["content"] is None:
+            raise TypeError("RESPONSE IS NOT THE EXPECTED FORMAT")
+
+        content = resp["message"]["content"]
+
+        with open("resume.json", "w+") as f:
+            f.write(content)
+
+        self.resume = json.loads(content)
+        return self.resume
