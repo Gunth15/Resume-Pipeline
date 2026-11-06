@@ -12,9 +12,10 @@ def key_phrases_prompt(description: str) -> str:
     Based on the job post, return the following information as a JSON blob. Match the schema below EXACTLY. Do not include a preamble in your response.
     ```json
     {{
+        'job' : <>Job title. String or Null.</>,
         'company' : <>The company/organization the job is for. String or Null.</>,
         'requirements' : <>The requirements for the job post. List of requirements or null.</> {{
-            'type' : <>Type of the requirement. Value is either "education", "technical", or "senority"</>,
+            'type' : <>Type of the requirement. Value is either "education", "technical", or "seniority"</>,
             'importance' : <>Is the requirement prefered or required. Value is prefered or required</>,
             'description' : <>A summarised version of the requirement found. String or null</>,
 
@@ -42,12 +43,63 @@ class Editor:
                     "content": prompt,
                 }
             ],
+            format = {
+                "type": "object",
+                "properties": {
+                    "job" : {
+                        "type" : ["string", "null"]
+                    },
+                    "company": {
+                        "type": ["string", "null"]
+                    },
+                    "requirements": {
+                        "type": ["array", "null"],
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["education", "technical", "senority"]
+                                },
+                                "importance": {
+                                    "type": "string",
+                                    "enum": ["preferred", "required"]
+                                },
+                                "description": {
+                                    "type": ["string", "null"]
+                                }
+                            },
+                            "required": ["type", "importance", "description"]
+                        }
+                    },
+                    "hard_skills": {
+                        "type": ["array", "null"],
+                        "items": {"type": "string"}
+                    },
+                    "soft_skills": {
+                        "type": ["array", "null"],
+                        "items": {"type": "string"}
+                    },
+                    "tools": {
+                        "type": ["array", "null"],
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": [
+                    "company",
+                    "requirements",
+                    "hard_skills",
+                    "soft_skills",
+                    "tools"
+                ]
+            },
+            think=False,
         )
 
-        if resp.message.content is None:
+        if resp['message']['content'] is None:
             raise TypeError("RESPONSE IS NOT THE EXPECTED FORMAT")
 
-        content = resp.message.content
+        content = resp['message']['content']
 
         with open("response.json", "w+") as f:
             f.write(content)
