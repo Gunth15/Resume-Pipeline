@@ -1,17 +1,41 @@
 Screen {
     layout: vertical;
+    background: $background;
 }
 
-#main {
+Header {
+    background: $panel;
+    color: $primary;
+    border-bottom: solid $primary;
+}
 
+Footer {
+    background: $panel;
+    border-top: solid $boost;
+}
+
+#body {
+    height: 1fr;
 }
 
 #sidebar {
-    dock: right;
     width: 30;
     height: 100%;
     background: $panel;
+    border-right: solid $boost;
     padding: 1;
+}
+
+#sidebar .brand {
+    text-style: bold;
+    color: $primary;
+    padding: 0 0 1 0;
+}
+
+#sidebar .section-title {
+    color: $text-muted;
+    text-style: bold;
+    margin: 1 0 1 0;
 }
 
 #sidebar Button {
@@ -19,10 +43,84 @@ Screen {
     margin-bottom: 1;
 }
 
+#sidebar Button.nav {
+    background: transparent;
+    color: $text;
+    border: tall $panel;
+}
 
-#output {
-    height: 1fr;
+#sidebar Button.nav:hover {
+    background: $boost;
+    border: tall $secondary;
+}
+
+#sidebar Button.nav-active {
+    background: $primary;
+    color: $background;
+    text-style: bold;
+    border: tall $primary;
+}
+
+#sidebar Button.nav-active:hover {
+    background: $primary;
+    border: tall $primary;
+}
+
+#sidebar Button:focus {
+    border: tall $secondary;
+}
+
+#actions {
+    dock: bottom;
+    height: auto;
     width: 100%;
-    border: round $success;
-    padding: 1;
+}
+
+#status {
+    color: $text-muted;
+    margin-top: 1;
+}
+
+#views {
+    width: 1fr;
+    height: 100%;
+}
+
+.view {
+    height: 100%;
+    padding: 1 2;
+    background: $background;
+}
+
+.view-title {
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 0;
+}
+
+.hint {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#job-input {
+    height: 12;
+    border: round $boost;
+    background: $surface;
+    margin-bottom: 1;
+}
+
+#job-input:focus {
+    border: round $primary;
+}
+
+.output {
+    height: 1fr;
+    border: round $boost;
+    background: $surface;
+    padding: 0 1;
+}
+
+.output:focus-within {
+    border: round $secondary;
 }

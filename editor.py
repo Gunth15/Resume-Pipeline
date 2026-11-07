@@ -5,6 +5,7 @@ from ollama import Client
 import json
 import yaml
 import pathlib
+import typst
 from genson import SchemaBuilder
 
 
@@ -197,5 +198,8 @@ class Editor:
             raise Error("Generate a resume first.")
         if self.case_dir is None:
             self.create_case_directory()
-        with open(f"{self.case_dir}/resume.json", "w+") as f:
-            json.dump(self.resume, f)
+        typst.compile(
+            "resume.typ",
+            output=f"{self.case_dir}/resume.pdf",
+            sys_inputs={"data": json.dumps(self.resume)},
+        )
