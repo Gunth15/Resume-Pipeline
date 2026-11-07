@@ -79,9 +79,9 @@ def key_phrases_prompt(description: str) -> str:
     """
 
 
-def resume_prompt(job: str, profile: str) -> str:
+def resume_prompt(job: str, profile: str, qa: str) -> str:
     return f"""
-    Using the user's profile information, which is between the <profile></profile>XML tags, create a resume tailored from the relevant job information, which is between the <job></job>XML tags.
+    Using the user's profile information, between the <profile></profile>XML tags with the questions and answers between the <QA></QA>XML tags to create a resume tailored from the relevant job information, which is between the <job></job>XML tags.
     DO PICK the information that aligns best with the job information.
     DO MAKE THE RESUME ONE PAGE
     DO NOT MAKE UP INFORMATION THAT CAN NOT BE INFERRED FROM THE USER'S profile.
@@ -90,6 +90,9 @@ def resume_prompt(job: str, profile: str) -> str:
     <profile>
         {profile}
     </profile>
+    <QA>
+        {qa}
+    </QA>
     <job>
         {job}
     </job>
@@ -244,7 +247,22 @@ class Editor:
             yaml.dump(self.profile, f)
 
     def generate_resume(self):
-        prompt = resume_prompt(json.dumps(self.key_phrases), json.dumps(self.profile))
+        qa = (
+            [
+                {
+                    "question": question,
+                    "answer": self.answers[index] if index < len(self.answers) else "",
+                }
+                for index, question in enumerate(self.questions)
+            ]
+            if self.questions is not None
+            else "No Questions and Answers found"
+        )
+        prompt = resume_prompt(
+            json.dumps(self.key_phrases),
+            json.dumps(self.profile),
+            json.dumps(qa),
+        )
         resp: ChatResponse = self.client.chat(
             model=self.model,
             messages=[
