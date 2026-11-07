@@ -15,6 +15,18 @@ Transforms your experience into a beautiful resume
 - Templates will be in Typst and users will have to define the data used in the template as a contract
 - Each generation will be its own savable case(Cases contain the skill extracted, job description, and the resume generated)
 
+## Cases
+
+Each save lives in its own case directory:
+
+- `response.json` — extracted job key phrases
+- `profile.yaml` — profile used for generation
+- `job.txt` — original job description
+- `resume.json` — generated resume data
+- `resume.pdf` — compiled resume
+
+Use **Restore case** (or `Ctrl+O`) in the app to reopen a previous case.
+
 ## Prof file structure
 
 ## Config file options

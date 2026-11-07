@@ -81,6 +81,36 @@ Footer {
     margin-top: 1;
 }
 
+RestoreCaseScreen {
+    align: center middle;
+    background: $background 70%;
+}
+
+#restore-dialog {
+    width: 70;
+    max-width: 90%;
+    height: 24;
+    max-height: 80%;
+    padding: 1 2;
+    background: $panel;
+    border: round $primary;
+}
+
+#case-list {
+    height: 1fr;
+    border: round $boost;
+    background: $surface;
+}
+
+#case-list:focus {
+    border: round $secondary;
+}
+
+#restore-cancel {
+    width: 100%;
+    margin-top: 1;
+}
+
 #views {
     width: 1fr;
     height: 100%;

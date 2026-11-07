@@ -1,5 +1,5 @@
 ///////////////////preamble
-#let source = yaml("./email_marketing.yaml")
+#let source = json(bytes(sys.inputs.data))
 
 #set text(size: 10.5pt, font: "Liberation Serif")
 #set page(

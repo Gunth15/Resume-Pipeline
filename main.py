@@ -1,8 +1,10 @@
 import json
+import pathlib
 
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import ModalScreen
 from textual.theme import Theme
 from textual.widgets import (
     Button,
@@ -10,11 +12,13 @@ from textual.widgets import (
     Footer,
     Header,
     Markdown,
+    OptionList,
     Static,
     TextArea,
 )
+from textual.widgets.option_list import Option
 
-from editor import Editor
+from editor import Editor, case_label, find_cases
 
 PORTAL2_THEME = Theme(
     name="portal2",
@@ -57,6 +61,7 @@ class SideBarWidget(Vertical):
             yield Static("Actions", classes="section-title")
             yield Button("Execute", id="exec", variant="primary")
             yield Button("Save case", id="save", variant="success")
+            yield Button("Restore case", id="restore")
             yield Static("", id="status")
 
 
@@ -78,6 +83,9 @@ class SummarizeJob(Vertical):
     def update_output(self, data) -> None:
         self.query_one("#summary-output", Markdown).update(as_json_markdown(data))
 
+    def clear_output(self) -> None:
+        self.query_one("#summary-output", Markdown).update("_No summary yet._")
+
 
 class ProfileView(Vertical):
     def compose(self):
@@ -91,6 +99,9 @@ class ProfileView(Vertical):
 
     def update_output(self, data) -> None:
         self.query_one("#profile-output", Markdown).update(as_json_markdown(data))
+
+    def clear_output(self) -> None:
+        self.query_one("#profile-output", Markdown).update("_Profile not loaded yet._")
 
 
 class GenerateResumeView(Vertical):
@@ -106,6 +117,42 @@ class GenerateResumeView(Vertical):
     def update_output(self, data) -> None:
         self.query_one("#resume-output", Markdown).update(as_json_markdown(data))
 
+    def clear_output(self) -> None:
+        self.query_one("#resume-output", Markdown).update("_No resume generated yet._")
+
+
+class RestoreCaseScreen(ModalScreen[pathlib.Path | None]):
+    BINDINGS = [("escape", "cancel", "Cancel")]
+
+    def __init__(self, cases) -> None:
+        super().__init__()
+        self.cases = cases
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="restore-dialog"):
+            yield Static("Restore a case", classes="view-title")
+            yield Static("Choose a saved session to reopen.", classes="hint")
+            yield OptionList(id="case-list")
+            yield Button("Cancel", id="restore-cancel")
+
+    def on_mount(self) -> None:
+        case_list = self.query_one("#case-list", OptionList)
+        for case in self.cases:
+            case_list.add_option(Option(case_label(case), id=str(case)))
+        if self.cases:
+            case_list.highlighted = 0
+        case_list.focus()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        self.dismiss(pathlib.Path(event.option.id))
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "restore-cancel":
+            self.dismiss(None)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
 
 class ResumePipelineApp(App):
     CSS_PATH = "layout.tcss"
@@ -117,6 +164,7 @@ class ResumePipelineApp(App):
         ("e", "show_resume", "Resume"),
         ("ctrl+x", "execute", "Execute"),
         ("ctrl+s", "save", "Save"),
+        ("ctrl+o", "restore", "Restore"),
         ("ctrl+q", "quit", "Quit"),
     ]
 
@@ -153,6 +201,9 @@ class ResumePipelineApp(App):
             return
         if button_id == "save":
             self.action_save()
+            return
+        if button_id == "restore":
+            self.action_restore()
             return
 
         view = {
@@ -212,6 +263,52 @@ class ResumePipelineApp(App):
 
         self._update_status()
         self.notify(f"Saved to {editor.case_dir}", title="Case saved", severity="success")
+
+    def action_restore(self) -> None:
+        cases = find_cases()
+        if not cases:
+            self.notify(
+                "No saved cases found. Save a case first.",
+                title="Restore case",
+                severity="warning",
+            )
+            return
+        self.push_screen(RestoreCaseScreen(cases), self._on_case_selected)
+
+    def _on_case_selected(self, case_path: pathlib.Path | None) -> None:
+        if case_path is not None:
+            self._restore_case(case_path)
+
+    def _restore_case(self, case_path: pathlib.Path) -> None:
+        try:
+            state = self.editor.restore_case(case_path)
+        except Exception as error:
+            self.notify(str(error), title="Restore failed", severity="error")
+            return
+
+        self.query_one("#job-input", TextArea).text = state["job_description"] or ""
+
+        summarize = self.query_one(SummarizeJob)
+        if state["key_phrases"] is not None:
+            summarize.update_output(state["key_phrases"])
+        else:
+            summarize.clear_output()
+
+        self.query_one(ProfileView).update_output(state["profile"])
+
+        resume = self.query_one(GenerateResumeView)
+        if state["resume"] is not None:
+            resume.update_output(state["resume"])
+        else:
+            resume.clear_output()
+
+        self._switch_to("view-summarize")
+        self._update_status()
+        self.notify(
+            f"Restored {case_path.name}",
+            title="Case restored",
+            severity="success",
+        )
 
     def action_execute(self) -> None:
         state = self.query_one(ContentSwitcher).current
