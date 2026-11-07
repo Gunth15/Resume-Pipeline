@@ -18,6 +18,42 @@ CASE_FILES = (
     "resume.pdf",
 )
 
+# The resume prompt includes the profile, job data, and all Q&A. With Ollama's
+# default 4096-token context this can be cut off mid-JSON, so give it room.
+CHAT_OPTIONS = {
+    "num_ctx": 16384,
+    "num_predict": 4096,
+}
+
+
+def response_content(resp, label: str) -> str:
+    """Get response text, with a useful error when generation was cut off."""
+    if resp.get("done_reason") == "length":
+        raise ValueError(
+            f"{label}: the model response was cut off at the token limit. "
+            "Try increasing num_ctx/num_predict or shortening the questions."
+        )
+
+    content = resp["message"]["content"]
+    if content is None:
+        raise TypeError(f"{label}: response is not the expected format.")
+    return content
+
+
+def parse_json_response(content: str, label: str):
+    """Parse model JSON, reporting truncation instead of a raw decoder error."""
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as error:
+        snippet = content[max(0, error.pos - 80) : error.pos + 80]
+        raise ValueError(
+            f"{label}: the model returned invalid JSON "
+            f"({error.msg} at line {error.lineno}, column {error.colno}). "
+            "The response may have been truncated. Try increasing num_ctx "
+            "or shortening the questions.\n"
+            f"Near: {snippet!r}"
+        ) from error
+
 
 def find_cases(root="."):
     """Return saved case directories under root, newest first."""
@@ -209,14 +245,11 @@ class Editor:
                 ],
             },
             think=False,
+            options=CHAT_OPTIONS,
         )
 
-        if resp["message"]["content"] is None:
-            raise TypeError("RESPONSE IS NOT THE EXPECTED FORMAT")
-
-        content = resp["message"]["content"]
-
-        self.key_phrases = json.loads(content)
+        content = response_content(resp, "Job summary")
+        self.key_phrases = parse_json_response(content, "Job summary")
         return self.key_phrases
 
     def save_key_phrases(self):
@@ -273,14 +306,11 @@ class Editor:
             ],
             format=self.profile_schema,
             think=False,
+            options=CHAT_OPTIONS,
         )
 
-        if resp["message"]["content"] is None:
-            raise TypeError("RESPONSE IS NOT THE EXPECTED FORMAT")
-
-        content = resp["message"]["content"]
-
-        self.resume = json.loads(content)
+        content = response_content(resp, "Resume")
+        self.resume = parse_json_response(content, "Resume")
         return self.resume
 
     def generate_questions(self):
@@ -304,16 +334,13 @@ class Editor:
                 },
             },
             think=False,
+            options=CHAT_OPTIONS,
         )
 
-        if resp["message"]["content"] is None:
-            raise TypeError("RESPONSE IS NOT THE EXPECTED FORMAT")
-
-        content = resp["message"]["content"]
-
-        questions = json.loads(content)
+        content = response_content(resp, "Questions")
+        questions = parse_json_response(content, "Questions")
         if not isinstance(questions, list):
-            raise TypeError("RESPONSE IS NOT THE EXPECTED FORMAT")
+            raise TypeError(f"Questions: expected a JSON list, got {type(questions).__name__}.")
 
         self.questions = [str(question) for question in questions]
         self.answers = ["" for _ in self.questions]
