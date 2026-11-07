@@ -1,0 +1,28 @@
+Screen {
+    layout: vertical;
+}
+
+#main {
+
+}
+
+#sidebar {
+    dock: right;
+    width: 30;
+    height: 100%;
+    background: $panel;
+    padding: 1;
+}
+
+#sidebar Button {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+
+#output {
+    height: 1fr;
+    width: 100%;
+    border: round $success;
+    padding: 1;
+}

@@ -1,7 +1,10 @@
+from copy import Error
+import time
 from ollama import ChatResponse
 from ollama import Client
 import json
 import yaml
+import pathlib
 from genson import SchemaBuilder
 
 
@@ -64,9 +67,24 @@ class Editor:
 
         (profile, profile_schema) = schema_from_profile(profile)
 
+        self.case_dir = None
         self.profile = profile
+        self.key_phrases = None
         self.profile_schema = profile_schema
         self.resume = None
+
+    def create_case_directory(self):
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+
+        company = self.key_phrases.get("company") if self.key_phrases else None
+
+        if company:
+            dir = f"./{company}-{timestamp}"
+        else:
+            dir = f"./case-{timestamp}"
+
+        pathlib.Path(dir).mkdir()
+        self.case_dir = dir
 
     def find_key_phrases(self, description: str):
         prompt = key_phrases_prompt(description)
@@ -127,13 +145,16 @@ class Editor:
 
         content = resp["message"]["content"]
 
-        with open("response.json", "w+") as f:
-            f.write(content)
-
         self.key_phrases = json.loads(content)
         return self.key_phrases
 
-    def set_schema_from_profile(self, file: str):
+    def save_key_phrases(self):
+        if self.case_dir is None:
+            self.create_case_directory()
+        with open(f"{self.case_dir}/response.json", "w+") as f:
+            json.dump(self.key_phrases, f)
+
+    def set_profile_and_schema(self, file: str):
         with open(file) as prof_file:
             profile = yaml.safe_load(prof_file)
             builder = SchemaBuilder()
@@ -142,6 +163,12 @@ class Editor:
             self.profile = profile
             self.profile_schema = builder.to_schema()
             return (self.profile, self.profile_schema)
+
+    def save_profile(self):
+        if self.case_dir is None:
+            self.create_case_directory()
+        with open(f"{self.case_dir}/profile.yaml", "w+") as f:
+            yaml.dump(self.profile, f)
 
     def generate_resume(self):
         prompt = resume_prompt(json.dumps(self.key_phrases), json.dumps(self.profile))
@@ -162,8 +189,13 @@ class Editor:
 
         content = resp["message"]["content"]
 
-        with open("resume.json", "w+") as f:
-            f.write(content)
-
         self.resume = json.loads(content)
         return self.resume
+
+    def save_resume(self):
+        if self.resume is None:
+            raise Error("Generate a resume first.")
+        if self.case_dir is None:
+            self.create_case_directory()
+        with open(f"{self.case_dir}/resume.json", "w+") as f:
+            json.dump(self.resume, f)

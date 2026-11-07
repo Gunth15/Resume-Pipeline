@@ -1,185 +1,85 @@
 import json
-
 from textual.app import App, ComposeResult
-from textual.containers import Vertical
-from textual.screen import Screen
+from textual.containers import Vertical, VerticalScroll
 from textual.widgets import (
-    Header,
+    Pretty,
+    ContentSwitcher,
     Footer,
     TextArea,
     Static,
     Button,
-    RichLog,
 )
 
 from editor import Editor
 
 
-class ProfileSchemaScreen(Screen):
-    BINDINGS = [
-        ("escape", "go_back", "Back"),
-    ]
-
-    CSS = """
-    #schema {
-        height: 1fr;
-        border: round $primary;
-    }
-
-    #back {
-        width: 100%;
-        margin: 1 0;
-    }
-    """
-
-    def __init__(self, schema: dict):
-        super().__init__()
-        self.schema = schema
-
+class SideBarWidget(Static):
     def compose(self) -> ComposeResult:
-        yield Header()
-
-        yield TextArea(
-            json.dumps(
-                self.schema,
-                indent=2,
-                ensure_ascii=False,
-            ),
-            id="schema",
-            read_only=True,
+        yield Button(
+            "Summarize a job",
+            id="summarize-job",
+            variant="default",
         )
 
         yield Button(
-            "Back",
-            id="back",
-            variant="primary",
-        )
-
-        yield Footer()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "back":
-            self.action_go_back()
-
-    def action_go_back(self) -> None:
-        self.app.pop_screen()
-
-
-class ResumeGenerationScreen(Screen):
-    BINDINGS = [
-        ("escape", "go_back", "Back"),
-    ]
-
-    CSS = """
-    #resume {
-        height: 1fr;
-        border: round $success;
-        padding: 1;
-        overflow-y: auto;
-    }
-
-    #generate, #back {
-        width: 100%;
-        margin: 1 0;
-    }
-    """
-
-    def __init__(self, editor: Editor):
-        super().__init__()
-        self.editor = editor
-
-    def compose(self) -> ComposeResult:
-        yield Header()
-
-        yield Static("Generated Resume")
-
-        yield RichLog(
-            id="resume",
-            wrap=True,
-            markup=False,
+            "View Profile Schema",
+            id="profile-view",
+            variant="default",
         )
 
         yield Button(
             "Generate Resume",
-            id="generate",
-            variant="success",
+            id="generate-resume",
+            variant="default",
         )
 
         yield Button(
-            "Back",
-            id="back",
-            variant="primary",
+            "Excute",
+            id="exec",
+            variant="error",
         )
 
-        yield Footer()
+        yield Button(
+            "Save",
+            id="save",
+            variant="success",
+        )
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "generate":
-            self.action_generate_resume()
 
-        elif event.button.id == "back":
-            self.action_go_back()
-
-    def action_generate_resume(self) -> None:
-        output = self.query_one("#resume", RichLog)
-        output.clear()
-
-        if not getattr(self.editor, "key_phrases", None):
-            output.write("Extract key phrases from a job description first.")
-            return
-
-        try:
-            result = self.editor.generate_resume()
-
-            if isinstance(result, str):
-                result = json.loads(result)
-
-            output.write(
-                json.dumps(
-                    result,
-                    indent=2,
-                    ensure_ascii=False,
-                )
+class SummarizeJob(Vertical):
+    def compose(self):
+        yield Static("Summarize Job")
+        yield TextArea(
+            "Paste the job description here...",
+        )
+        with VerticalScroll(id="profile-view"):
+            yield Pretty(
+                "Summary goes here",
             )
 
-            output.scroll_end()
 
-        except Exception as e:
-            output.write(f"Error generating resume: {e}")
-            output.scroll_end()
+class ProfileView(Vertical):
+    def compose(self):
+        yield Static("View Profile in JSON")
+        with VerticalScroll(id="profile-view"):
+            yield Pretty("Profile not loaded yet")
 
-    def action_go_back(self) -> None:
-        self.app.pop_screen()
+
+class GenerateResumeView(Vertical):
+    def compose(self):
+        yield Static("Generate Resume")
+        with VerticalScroll(id="profile-view"):
+            yield Pretty("No resume generated yet")
 
 
 class ResumePipelineApp(App):
-    CSS = """
-    Screen {
-        layout: vertical;
-    }
-
-    #description {
-        height: 1fr;
-        border: round $primary;
-    }
-
-    #output {
-        height: 1fr;
-        border: round $success;
-        padding: 1;
-        overflow-y: auto;
-    }
-
-    #run, #schema, #resume {
-        width: 100%;
-        margin: 1 0;
-    }
-    """
-
+    CSS_PATH = "layout.tcss"
     BINDINGS = [
-        ("ctrl+r", "run_editor", "Extract Key Phrases"),
-        ("ctrl+s", "show_schema", "Profile Schema"),
-        ("ctrl+g", "show_resume", "Generate Resume"),
+        ("q", "show_sum", "Summarize view"),
+        ("w", "show_profile", "Profile view"),
+        ("e", "show_resume", "Generate view"),
+        ("ctrl+s", "save", "save"),
+        ("ctrl+x", "execute", "execute"),
         ("ctrl+q", "quit", "Quit"),
     ]
 
@@ -193,115 +93,71 @@ class ResumePipelineApp(App):
             profile=profile_path,
         )
 
-        self.profile_path = profile_path
-
         super().__init__()
 
     def compose(self) -> ComposeResult:
-        yield Header()
-
-        with Vertical():
-            yield Static("Job Description")
-
-            yield TextArea(
-                "Paste the job description here...",
-                id="description",
-            )
-
-            yield Button(
-                "Find Key Phrases",
-                id="run",
-                variant="primary",
-            )
-
-            yield Button(
-                "View Profile Schema",
-                id="schema",
-                variant="default",
-            )
-
-            yield Button(
-                "Generate Resume",
-                id="resume",
-                variant="success",
-            )
-
-            yield RichLog(
-                id="output",
-                wrap=True,
-                markup=False,
-            )
+        yield SideBarWidget(id="sidebar")
+        with ContentSwitcher(initial="summarize-job"):
+            yield SummarizeJob(id="summarize-job")
+            yield ProfileView(id="profile-view")
+            yield GenerateResumeView(id="generate-resume")
 
         yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "run":
-            self.action_run_editor()
-
-        elif event.button.id == "schema":
-            self.action_show_schema()
-
-        elif event.button.id == "resume":
-            self.action_show_resume()
-
-    def action_run_editor(self) -> None:
-        description = self.query_one(
-            "#description",
-            TextArea,
-        ).text
-
-        output = self.query_one("#output", RichLog)
-        output.clear()
-
-        try:
-            result = self.editor.find_key_phrases(description)
-
-            output.write(
-                json.dumps(
-                    result,
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-
-            output.scroll_end()
-
-        except Exception as e:
-            output.write(f"Error extracting key phrases: {e}")
-
-            output.scroll_end()
-
-    def action_show_schema(self) -> None:
-        try:
-            self.push_screen(ProfileSchemaScreen(self.editor.profile_schema))
-
-        except Exception as e:
-            output = self.query_one(
-                "#output",
-                RichLog,
-            )
-
-            output.write(f"Error loading profile schema: {e}")
-
-            output.scroll_end()
-
-    def action_show_resume(self) -> None:
-        if not getattr(
-            self.editor,
-            "key_phrases",
-            None,
-        ):
-            output = self.query_one(
-                "#output",
-                RichLog,
-            )
-
-            output.write("Please extract key phrases from a job description first.")
-
-            output.scroll_end()
+        if event.button.id == "exec":
+            self.action_exec()
             return
 
-        self.push_screen(ResumeGenerationScreen(self.editor))
+        if event.button.id == "save":
+            self.action_save()
+            return
+
+        self.query_one(ContentSwitcher).current = event.button.id
+
+        editor = self.editor
+        if event.button.id == "profile-view":
+            self.query_one(ProfileView).query_one(Pretty).update(editor.profile)
+
+    def action_show_sum(self) -> None:
+        self.query_one(ContentSwitcher).current = "summarize-job"
+
+    def action_show_profile(self) -> None:
+        self.query_one(ContentSwitcher).current = "profile-view"
+
+    def action_show_resume(self) -> None:
+        self.query_one(ContentSwitcher).current = "generate-resume"
+
+    def action_save(self) -> None:
+        state = self.query_one(ContentSwitcher).current
+        editor = self.editor
+
+        match state:
+            case "summarize-job":
+                editor.save_key_phrases()
+
+            case "profile-view":
+                editor.save_profile()
+
+            case "generate-resume":
+                editor.save_resume()
+
+    def action_exec(self) -> None:
+        state = self.query_one(ContentSwitcher).current
+        editor = self.editor
+
+        match state:
+            case "summarize-job":
+                sj = self.query_one(SummarizeJob)
+                text = sj.query_one(TextArea).text
+                sum = editor.find_key_phrases(text)
+                sj.query_one(Pretty).update(sum)
+            case "profile-view":
+                prof, _ = editor.set_profile_and_schema("master.yaml")
+                self.query_one(ProfileView).query_one(Pretty).update(prof)
+            case "generate-resume":
+                resume = editor.generate_resume()
+                self.query_one(GenerateResumeView).query_one(Pretty).update(resume)
 
 
 if __name__ == "__main__":
