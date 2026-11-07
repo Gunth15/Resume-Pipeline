@@ -154,3 +154,39 @@ RestoreCaseScreen {
 .output:focus-within {
     border: round $secondary;
 }
+
+#questions-scroll {
+    height: 1fr;
+    border: round $boost;
+    background: $surface;
+    padding: 1;
+}
+
+#questions-scroll:focus-within {
+    border: round $secondary;
+}
+
+#questions-list {
+    height: auto;
+}
+
+.question-item {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.question-text {
+    color: $text;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.answer-input {
+    height: 4;
+    border: round $boost;
+    background: $panel;
+}
+
+.answer-input:focus {
+    border: round $primary;
+}

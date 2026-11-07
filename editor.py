@@ -9,7 +9,14 @@ import typst
 from genson import SchemaBuilder
 
 
-CASE_FILES = ("response.json", "profile.yaml", "resume.json", "job.txt", "resume.pdf")
+CASE_FILES = (
+    "response.json",
+    "profile.yaml",
+    "resume.json",
+    "questions.json",
+    "job.txt",
+    "resume.pdf",
+)
 
 
 def find_cases(root="."):
@@ -89,6 +96,24 @@ def resume_prompt(job: str, profile: str) -> str:
     """
 
 
+def question_prompt(job: str, profile: str) -> str:
+    return f"""
+    Using the user's profile information, which is between the <profile></profile>XML tags, create a series of questions to ask the user that relates to the necesarry job information which is between the <job></job>XML tags.
+    DO PICK the information that aligns best with the job information.
+    DO ASK RELEVANT QUESTIONS BASED ON COMPANY.
+    DO ASK RELEVANT QUESTIONS BASED ON SENORITY.
+    DO ASK RELEVANT QUESTIONS BASED ON PROFILE EXPERIENCE.
+    TRY TO ASK QUESTIONS TO FILL IN GAPS BETWEEN RESUME AND GIVEN JOB INFORMATION.
+    The questions must be a JSON string list.
+    <profile>
+        {profile}
+    </profile>
+    <job>
+        {job}
+    </job>
+    """
+
+
 def schema_from_profile(file: str):
     with open(file) as prof_file:
         profile = yaml.safe_load(prof_file)
@@ -112,6 +137,8 @@ class Editor:
         self.profile_schema = profile_schema
         self.resume = None
         self.job_description = None
+        self.questions = None
+        self.answers = []
 
     def create_case_directory(self):
         timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -238,6 +265,61 @@ class Editor:
         self.resume = json.loads(content)
         return self.resume
 
+    def generate_questions(self):
+        job = self.key_phrases if self.key_phrases is not None else self.job_description
+        if job is None:
+            raise ValueError("Summarize a job first.")
+
+        prompt = question_prompt(json.dumps(job), json.dumps(self.profile))
+        resp: ChatResponse = self.client.chat(
+            model=self.model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            format={
+                "type": "array",
+                "items": {
+                    "type": "string",
+                },
+            },
+            think=False,
+        )
+
+        if resp["message"]["content"] is None:
+            raise TypeError("RESPONSE IS NOT THE EXPECTED FORMAT")
+
+        content = resp["message"]["content"]
+
+        questions = json.loads(content)
+        if not isinstance(questions, list):
+            raise TypeError("RESPONSE IS NOT THE EXPECTED FORMAT")
+
+        self.questions = [str(question) for question in questions]
+        self.answers = ["" for _ in self.questions]
+        return self.questions
+
+    def save_questions(self, answers=None):
+        if self.questions is None:
+            raise Error("Generate questions first.")
+        if self.case_dir is None:
+            self.create_case_directory()
+
+        if answers is not None:
+            self.answers = list(answers)
+
+        payload = [
+            {
+                "question": question,
+                "answer": self.answers[index] if index < len(self.answers) else "",
+            }
+            for index, question in enumerate(self.questions)
+        ]
+        with open(f"{self.case_dir}/questions.json", "w+") as f:
+            json.dump(payload, f, indent=2)
+
     def save_resume(self):
         if self.resume is None:
             raise Error("Generate a resume first.")
@@ -283,10 +365,28 @@ class Editor:
             with open(resume_file) as f:
                 resume = json.load(f)
 
+        questions = None
+        answers = []
+        questions_file = case_dir / "questions.json"
+        if questions_file.exists():
+            with open(questions_file) as f:
+                saved_questions = json.load(f)
+            if isinstance(saved_questions, list):
+                questions = []
+                for entry in saved_questions:
+                    if isinstance(entry, dict):
+                        questions.append(entry.get("question", ""))
+                        answers.append(entry.get("answer", ""))
+                    else:
+                        questions.append(str(entry))
+                        answers.append("")
+
         self.case_dir = str(case_dir)
         self.key_phrases = key_phrases
         self.job_description = job_description
         self.resume = resume
+        self.questions = questions
+        self.answers = answers
 
         return {
             "case_dir": self.case_dir,
@@ -295,4 +395,6 @@ class Editor:
             "profile_schema": self.profile_schema,
             "job_description": self.job_description,
             "resume": self.resume,
+            "questions": self.questions,
+            "answers": self.answers,
         }

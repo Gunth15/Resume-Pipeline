@@ -55,6 +55,7 @@ class SideBarWidget(Vertical):
 
         yield Button("Summarize a job", id="nav-summarize", classes="nav")
         yield Button("View profile schema", id="nav-profile", classes="nav")
+        yield Button("Answer questions", id="nav-questions", classes="nav")
         yield Button("Generate resume", id="nav-resume", classes="nav")
 
         with Vertical(id="actions"):
@@ -121,6 +122,57 @@ class GenerateResumeView(Vertical):
         self.query_one("#resume-output", Markdown).update("_No resume generated yet._")
 
 
+class QuestionItem(Vertical):
+    def __init__(self, index: int, question: str, answer: str = "") -> None:
+        super().__init__(classes="question-item")
+        self.index = index
+        self.question = question
+        self.answer = answer
+
+    def compose(self) -> ComposeResult:
+        yield Static(f"{self.index + 1}. {self.question}", classes="question-text")
+        yield TextArea(self.answer, classes="answer-input")
+
+    def get_answer(self) -> str:
+        return self.query_one(TextArea).text
+
+
+class QuestionsView(Vertical):
+    def compose(self) -> ComposeResult:
+        yield Static("Interview Questions", classes="view-title")
+        yield Static(
+            "Run Execute to generate questions from the job and profile. "
+            "Answer each one, then press Save case to store them.",
+            classes="hint",
+        )
+        with VerticalScroll(id="questions-scroll"):
+            yield Static("_No questions yet._", id="questions-empty")
+            yield Vertical(id="questions-list")
+
+    def update_output(self, questions, answers=None) -> None:
+        answers = answers or []
+        question_list = self.query_one("#questions-list", Vertical)
+        question_list.remove_children()
+        empty = self.query_one("#questions-empty", Static)
+
+        if not questions:
+            empty.display = True
+            return
+
+        empty.display = False
+        for index, question in enumerate(questions):
+            answer = answers[index] if index < len(answers) else ""
+            question_list.mount(QuestionItem(index, str(question), answer or ""))
+
+    def collect_answers(self) -> list[str]:
+        return [
+            item.get_answer() for item in self.query(QuestionItem).results(QuestionItem)
+        ]
+
+    def clear_output(self) -> None:
+        self.update_output([], [])
+
+
 class RestoreCaseScreen(ModalScreen[pathlib.Path | None]):
     BINDINGS = [("escape", "cancel", "Cancel")]
 
@@ -161,7 +213,8 @@ class ResumePipelineApp(App):
     BINDINGS = [
         ("q", "show_sum", "Summarize"),
         ("w", "show_profile", "Profile"),
-        ("e", "show_resume", "Resume"),
+        ("e", "show_questions", "Questions"),
+        ("r", "show_resume", "Resume"),
         ("ctrl+x", "execute", "Execute"),
         ("ctrl+s", "save", "Save"),
         ("ctrl+o", "restore", "Restore"),
@@ -184,6 +237,7 @@ class ResumePipelineApp(App):
             with ContentSwitcher(initial="view-summarize", id="views"):
                 yield SummarizeJob(id="view-summarize", classes="view")
                 yield ProfileView(id="view-profile", classes="view")
+                yield QuestionsView(id="view-questions", classes="view")
                 yield GenerateResumeView(id="view-resume", classes="view")
         yield Footer()
 
@@ -209,6 +263,7 @@ class ResumePipelineApp(App):
         view = {
             "nav-summarize": "view-summarize",
             "nav-profile": "view-profile",
+            "nav-questions": "view-questions",
             "nav-resume": "view-resume",
         }.get(button_id)
         if view:
@@ -225,6 +280,7 @@ class ResumePipelineApp(App):
         mapping = {
             "view-summarize": "nav-summarize",
             "view-profile": "nav-profile",
+            "view-questions": "nav-questions",
             "view-resume": "nav-resume",
         }
         for button in self.query(".nav").results(Button):
@@ -243,6 +299,9 @@ class ResumePipelineApp(App):
     def action_show_profile(self) -> None:
         self._switch_to("view-profile")
 
+    def action_show_questions(self) -> None:
+        self._switch_to("view-questions")
+
     def action_show_resume(self) -> None:
         self._switch_to("view-resume")
 
@@ -255,6 +314,9 @@ class ResumePipelineApp(App):
                 editor.save_key_phrases()
             elif state == "view-profile":
                 editor.save_profile()
+            elif state == "view-questions":
+                answers = self.query_one(QuestionsView).collect_answers()
+                editor.save_questions(answers)
             elif state == "view-resume":
                 editor.save_resume()
         except Exception as error:
@@ -262,7 +324,9 @@ class ResumePipelineApp(App):
             return
 
         self._update_status()
-        self.notify(f"Saved to {editor.case_dir}", title="Case saved", severity="success")
+        self.notify(
+            f"Saved to {editor.case_dir}", title="Case saved", severity="success"
+        )
 
     def action_restore(self) -> None:
         cases = find_cases()
@@ -295,6 +359,12 @@ class ResumePipelineApp(App):
             summarize.clear_output()
 
         self.query_one(ProfileView).update_output(state["profile"])
+
+        questions = self.query_one(QuestionsView)
+        if state["questions"]:
+            questions.update_output(state["questions"], state["answers"])
+        else:
+            questions.clear_output()
 
         resume = self.query_one(GenerateResumeView)
         if state["resume"] is not None:
@@ -330,6 +400,10 @@ class ResumePipelineApp(App):
                 result = {"profile": profile, "schema": schema}
                 message = "Profile loaded."
 
+            elif state == "view-questions":
+                result = self.editor.generate_questions()
+                message = "Questions generated."
+
             elif state == "view-resume":
                 if self.editor.key_phrases is None:
                     raise ValueError("Summarize a job first.")
@@ -347,6 +421,7 @@ class ResumePipelineApp(App):
         view = {
             "view-summarize": SummarizeJob,
             "view-profile": ProfileView,
+            "view-questions": QuestionsView,
             "view-resume": GenerateResumeView,
         }[state]
         self.query_one(view).update_output(result)

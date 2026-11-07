@@ -6,7 +6,7 @@ Transforms your experience into a beautiful resume
 
 [x] One Mega Data thread of your Work history, personal info, education + user definable extensions
 [x] Parse job for key phrases, soft skills, hard skills , verbs, tools company, etc.
-[ ] Ask the user questions to create to find more skill that might have been missed
+[x] Ask the user questions to create to find more skill that might have been missed
 [ ] Make a Final resume using a given Typst template (The AI must be able to understand Typst, fit everything on one page, and FOLLOW THE TEMPLATE EXACTLY)
 [ ] Critique Data Thread
 
@@ -22,10 +22,13 @@ Each save lives in its own case directory:
 - `response.json` — extracted job key phrases
 - `profile.yaml` — profile used for generation
 - `job.txt` — original job description
+- `questions.json` — generated questions and the user's answers
 - `resume.json` — generated resume data
 - `resume.pdf` — compiled resume
 
 Use **Restore case** (or `Ctrl+O`) in the app to reopen a previous case.
+
+Use **Answer questions** (or `R`) to generate interview questions from the current job, type answers, and save them with `Ctrl+S`.
 
 ## Prof file structure
 
