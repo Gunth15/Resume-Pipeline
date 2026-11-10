@@ -164,8 +164,12 @@ def schema_from_profile(file: str):
 
 
 class Editor:
-    def __init__(self, model="", profile="master.yaml") -> None:
+    def __init__(
+        self, model="", profile="master.yaml", template="template.typ"
+    ) -> None:
         self.model = model
+        self.template = template
+        self.profile_path = profile
         self.client = Client()
 
         (profile, profile_schema) = schema_from_profile(profile)
@@ -373,7 +377,7 @@ class Editor:
         with open(f"{self.case_dir}/resume.json", "w+") as f:
             json.dump(self.resume, f, indent=2)
         typst.compile(
-            "resume.typ",
+            self.template,
             output=f"{self.case_dir}/resume.pdf",
             sys_inputs={"data": json.dumps(self.resume)},
         )
