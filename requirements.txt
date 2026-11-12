@@ -1,5 +1,7 @@
-ollama
-textual
-genson
-pyyaml
-typst
+# Pinned to the versions verified working on Python 3.14.
+genson==1.4.0
+ollama==0.6.3
+PyYAML==6.0.3
+setuptools==84.2.1
+textual==8.2.8
+typst==0.15.2
